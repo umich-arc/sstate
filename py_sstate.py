@@ -20,7 +20,9 @@ if __name__ == '__main__':
         gpu_alloc = 'N/A'
         for pair in key_vals:
             key = pair.split('=')[0]
-            val = pair.split('=')[1]
+            val = None
+            if len(pair.split('=')) > 1:
+                val = pair.split('=')[1]
 
             if key == 'CPUAlloc':
                 cpu_alloc = int(val)
