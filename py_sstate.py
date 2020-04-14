@@ -10,7 +10,7 @@ def human_readable(num, suffix='B'):
 
 
 if __name__ == '__main__':
-    output = subprocess.check_output('/opt/slurm/bin/scontrol show nodes --oneliner | head -2', shell=True)
+    output = subprocess.check_output('/opt/slurm/bin/scontrol show nodes --oneliner | head -2', shell=True).decode()
 
     rows = []
     for line in output.splitlines():
