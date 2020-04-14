@@ -18,6 +18,7 @@ if __name__ == '__main__':
         node_name = key_vals[0].split("=")[1]
         gpu_tot = 'N/A'
         gpu_alloc = 'N/A'
+        percent_used_gpu = 'N/A'
         for pair in key_vals:
             key = pair.split('=')[0]
             val = None
@@ -45,7 +46,8 @@ if __name__ == '__main__':
 
         percent_used_cpu = cpu_alloc / cpu_tot
         percent_used_mem = alloc_mem / total_mem
-        percent_used_gpu = gpu_alloc / gpu_tot
+        if type(gpu_alloc) is int and type(gpu_tot) is int:
+            percent_used_gpu = gpu_alloc / gpu_tot
 
         alloc_mem = human_readable(alloc_mem)
         total_mem = human_readable(total_mem)
