@@ -39,12 +39,13 @@ if __name__ == '__main__':
     # Every line represents a new node
     for line in output.splitlines():
         if args.partition:
+            back_to_start = False
             for pair in line.split():
                 if pair.split('=')[0] == 'Partitions':
-                    print("True")
                     if args.partition == 'debug':
                         if pair.split('=')[1] != 'debug':
-                            continue
+                            back_to_start = True
+                            break
                     else:
                         found_correct_partition = False
                         for parition_type in pair.split('=')[1].split(','):
@@ -52,7 +53,10 @@ if __name__ == '__main__':
                                 found_correct_partition = True
                                 break
                         if not found_correct_partition:
-                            continue
+                            back_to_start = True
+                            break
+            if back_to_start:
+                continue
 
 
         overall_node += 1
