@@ -41,6 +41,7 @@ if __name__ == '__main__':
         if args.partition:
             for pair in line.split():
                 if pair.split('=')[0] == 'Partitions':
+                    print("True")
                     if args.partition == 'debug':
                         if pair.split('=')[1] != 'debug':
                             continue
