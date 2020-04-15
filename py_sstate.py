@@ -38,20 +38,26 @@ if __name__ == '__main__':
 
     # Every line represents a new node
     for line in output.splitlines():
+        # If a partition is specified, only those values are shown
         if args.partition:
+            # Initializes a bool that will send the loop back to the start if the partition is incorrect
             back_to_start = False
+            # Searches for the partition tag
             for pair in line.split():
                 if pair.split('=')[0] == 'Partitions':
+                    # If the partition is debug, only shows the nodes that exclusively specified debug
                     if args.partition == 'debug':
                         if pair.split('=')[1] != 'debug':
                             back_to_start = True
                             break
                     else:
+                        # Searches if the correct partition is listed in the partition tags for that node
                         found_correct_partition = False
                         for parition_type in pair.split('=')[1].split(','):
                             if parition_type == args.partition:
                                 found_correct_partition = True
                                 break
+                        # If the correct partition is not found, the line is ignored and a new line is loaded
                         if not found_correct_partition:
                             back_to_start = True
                             break
@@ -109,12 +115,16 @@ if __name__ == '__main__':
                     gpu_alloc = int(pair.split(",")[-1].split("=")[1])
                     overall_alloc_gpu += gpu_alloc
 
-        percent_used_cpu = cpu_alloc / cpu_tot
-        percent_used_mem = alloc_mem / total_mem
+        percent_used_cpu = 0
+        if cpu_tot > 0:
+            percent_used_cpu = cpu_alloc / cpu_tot * 100
+        percent_used_mem = 0
+        if total_mem > 0:
+            percent_used_mem = alloc_mem / total_mem * 100
         if type(gpu_alloc) is str and type(gpu_tot) is int:
             gpu_alloc = 0
         if type(gpu_alloc) is int and type(gpu_tot) is int:
-            percent_used_gpu = gpu_alloc / gpu_tot
+            percent_used_gpu = gpu_alloc / gpu_tot * 100
 
         alloc_mem = human_readable(alloc_mem)
         total_mem = human_readable(total_mem)
@@ -124,23 +134,23 @@ if __name__ == '__main__':
 
     overall_percent_used_cpu = 0
     if overall_total_cpu > 0:
-        overall_percent_used_cpu = overall_alloc_cpu / overall_total_cpu
+        overall_percent_used_cpu = overall_alloc_cpu / overall_total_cpu * 100
     if overall_node > 0:
         overall_cpu_load = overall_cpu_load / overall_node
 
     overall_percent_used_mem = 0
     if overall_total_mem > 0:
-        overall_percent_used_mem = overall_alloc_mem / overall_total_mem
+        overall_percent_used_mem = overall_alloc_mem / overall_total_mem * 100
 
     overall_alloc_mem = human_readable(overall_alloc_mem)
     overall_total_mem = human_readable(overall_total_mem)
 
     overall_percent_used_gpu = 'N/A'
     if overall_total_gpu > 0:
-        overall_percent_used_gpu = overall_alloc_gpu / overall_total_gpu
+        overall_percent_used_gpu = overall_alloc_gpu / overall_total_gpu * 100
 
     print(tabulate(rows, headers=['Node', 'AllocCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'TotalMem',
-                                  'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU', 'NodeState']))
+                                  'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU', 'NodeState'], floatfmt=".2f"))
 
     print("\nTotals:")
 
@@ -148,4 +158,4 @@ if __name__ == '__main__':
                     overall_alloc_mem, overall_total_mem, overall_percent_used_mem, overall_alloc_gpu,
                      overall_total_gpu, overall_percent_used_gpu]],
                    headers=['Node', 'AllocCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'TotalMem',
-                            'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU']))
+                            'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU'], floatfmt=".2f"))
