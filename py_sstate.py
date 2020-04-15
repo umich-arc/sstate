@@ -122,15 +122,22 @@ if __name__ == '__main__':
         rows.append([node_name, cpu_alloc, cpu_tot, percent_used_cpu, cpu_load, alloc_mem, total_mem, percent_used_mem,
                      gpu_alloc, gpu_tot, percent_used_gpu, node_state])
 
-    overall_percent_used_cpu = overall_alloc_cpu / overall_total_cpu
-    overall_cpu_load = overall_cpu_load / overall_node
+    overall_percent_used_cpu = 0
+    if overall_total_cpu > 0:
+        overall_percent_used_cpu = overall_alloc_cpu / overall_total_cpu
+    if overall_node > 0:
+        overall_cpu_load = overall_cpu_load / overall_node
 
-    overall_percent_used_mem = overall_alloc_mem / overall_total_mem
+    overall_percent_used_mem = 0
+    if overall_total_mem > 0:
+        overall_percent_used_mem = overall_alloc_mem / overall_total_mem
 
     overall_alloc_mem = human_readable(overall_alloc_mem)
     overall_total_mem = human_readable(overall_total_mem)
 
-    overall_percent_used_gpu = overall_alloc_gpu / overall_total_gpu
+    overall_percent_used_gpu = 'N/A'
+    if overall_total_gpu > 0:
+        overall_percent_used_gpu = overall_alloc_gpu / overall_total_gpu
 
     print(tabulate(rows, headers=['Node', 'AllocCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'TotalMem',
                                   'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU', 'NodeState']))
