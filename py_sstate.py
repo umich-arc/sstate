@@ -1,6 +1,8 @@
 from tabulate import tabulate
 import subprocess
 
+
+# This function converts MB to larger units
 def human_readable(num, suffix='B'):
     for unit in ['Mi','Gi','Ti','Pi','Ei','Zi']:
         if abs(num) < 1024.0:
@@ -10,8 +12,10 @@ def human_readable(num, suffix='B'):
 
 
 if __name__ == '__main__':
+    # Calls the scontrol script and gets its output
     output = subprocess.check_output('/opt/slurm/bin/scontrol show nodes --oneliner', shell=True).decode()
 
+    # Initializes variables to track values
     rows = []
     overall_node = 0
     overall_alloc_cpu = 0
@@ -23,19 +27,31 @@ if __name__ == '__main__':
 
     overall_alloc_gpu = 0
     overall_total_gpu = 0
+
+    # Every line represents a new node
     for line in output.splitlines():
         overall_node += 1
+
+        # This gets all key value pairs by splitting the line on whitespace
         key_vals = line.split()
         node_name = key_vals[0].split("=")[1]
+
+        # Initializes the GPU variables to N/A. This gets overwritten if the node has GPUs
         gpu_tot = 'N/A'
         gpu_alloc = 'N/A'
         percent_used_gpu = 'N/A'
+
+        # Loops through all key value pairs in the line
         for pair in key_vals:
+            # Gets the key of the pair
             key = pair.split('=')[0]
+
+            # Only gets the value if there is one
             val = None
             if len(pair.split('=')) > 1:
                 val = pair.split('=')[1]
 
+            # Changes values based on key
             if key == 'CPUAlloc':
                 cpu_alloc = int(val)
                 overall_alloc_cpu += cpu_alloc
@@ -54,10 +70,12 @@ if __name__ == '__main__':
             elif key == 'State':
                 node_state = val
             elif key == 'CfgTRES':
+                # If there is gpu data, gets the total number of gpus
                 if 'gres/gpu' in pair:
                     gpu_tot = int(pair.split(",")[-1].split("=")[1])
                     overall_total_gpu += gpu_tot
             elif key == 'AllocTRES':
+                # If there is gpu data, get the allocated number of gpus
                 if 'gres/gpu' in pair:
                     gpu_alloc = int(pair.split(",")[-1].split("=")[1])
                     overall_alloc_gpu += gpu_alloc
