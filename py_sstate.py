@@ -64,6 +64,8 @@ if __name__ == '__main__':
 
         percent_used_cpu = cpu_alloc / cpu_tot
         percent_used_mem = alloc_mem / total_mem
+        if type(gpu_alloc) is str and type(gpu_tot) is int:
+            gpu_alloc = 0
         if type(gpu_alloc) is int and type(gpu_tot) is int:
             percent_used_gpu = gpu_alloc / gpu_tot
 
