@@ -1,5 +1,6 @@
 from tabulate import tabulate
 import subprocess
+import argparse
 
 
 # This function converts MB to larger units
@@ -11,7 +12,14 @@ def human_readable(num, suffix='B'):
     return "%.1f%s%s" % (num, 'Yi', suffix)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-p", "--partition", help="Specify partition (standard, gpu, largemem, debug, standard-oc)")
+    args = parser.parse_args()
+    return args
+
 if __name__ == '__main__':
+    args = parse_args()
     # Calls the scontrol script and gets its output
     output = subprocess.check_output('/opt/slurm/bin/scontrol show nodes --oneliner', shell=True).decode()
 
@@ -30,6 +38,22 @@ if __name__ == '__main__':
 
     # Every line represents a new node
     for line in output.splitlines():
+        if args.partition:
+            for pair in line.split():
+                if pair.split('=')[0] == 'Partitions':
+                    if args.partition == 'debug':
+                        if pair.split('=')[1] != 'debug':
+                            continue
+                    else:
+                        found_correct_partition = False
+                        for parition_type in pair.split('=')[1].split(','):
+                            if parition_type == args.partition:
+                                found_correct_partition = True
+                                break
+                        if not found_correct_partition:
+                            continue
+
+
         overall_node += 1
 
         # This gets all key value pairs by splitting the line on whitespace
