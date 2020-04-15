@@ -86,11 +86,10 @@ if __name__ == '__main__':
     print(tabulate(rows, headers=['Node', 'AllocCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'TotalMem',
                                   'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU', 'NodeState']))
 
-    print("Totoals:")
+    print("\nTotals:")
 
     print(tabulate([[overall_node, overall_alloc_cpu, overall_total_cpu, overall_percent_used_cpu, overall_cpu_load,
                     overall_alloc_mem, overall_total_mem, overall_percent_used_mem, overall_alloc_gpu,
                      overall_total_gpu, overall_percent_used_gpu]],
                    headers=['Node', 'AllocCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'TotalMem',
                             'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU']))
-    
