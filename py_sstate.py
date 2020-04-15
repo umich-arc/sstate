@@ -14,7 +14,8 @@ def human_readable(num, suffix='B'):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--partition", help="Specify partition (standard, gpu, largemem, debug, standard-oc)")
+    parser.add_argument("-p", "--partition", help="Specify partition (standard, gpu, largemem, debug, standard-oc). "
+                                                  "If this is not specified all nodes will be shown")
     args = parser.parse_args()
     return args
 
@@ -115,45 +116,59 @@ if __name__ == '__main__':
                     gpu_alloc = int(pair.split(",")[-1].split("=")[1])
                     overall_alloc_gpu += gpu_alloc
 
+        # Calculates percent used for cpu
         percent_used_cpu = 0
         if cpu_tot > 0:
             percent_used_cpu = cpu_alloc / cpu_tot * 100
+
+        # Calculates percent used for memory
         percent_used_mem = 0
         if total_mem > 0:
             percent_used_mem = alloc_mem / total_mem * 100
+
+        # If there are GPUs but none are allocated, sets GPU allocated to 0
         if type(gpu_alloc) is str and type(gpu_tot) is int:
             gpu_alloc = 0
+        # Calculates percent used for GPU
         if type(gpu_alloc) is int and type(gpu_tot) is int:
             percent_used_gpu = gpu_alloc / gpu_tot * 100
 
+        # Swaps the allocated memory and total memory to a human readable format for the table
         alloc_mem = human_readable(alloc_mem)
         total_mem = human_readable(total_mem)
 
         rows.append([node_name, cpu_alloc, cpu_tot, percent_used_cpu, cpu_load, alloc_mem, total_mem, percent_used_mem,
                      gpu_alloc, gpu_tot, percent_used_gpu, node_state])
 
+    # Calculates the overall percent used for cpu
     overall_percent_used_cpu = 0
     if overall_total_cpu > 0:
         overall_percent_used_cpu = overall_alloc_cpu / overall_total_cpu * 100
+    # Calculates the average cpu load
     if overall_node > 0:
         overall_cpu_load = overall_cpu_load / overall_node
 
+    # Calculates the overall percent used for mem
     overall_percent_used_mem = 0
     if overall_total_mem > 0:
         overall_percent_used_mem = overall_alloc_mem / overall_total_mem * 100
 
+    # Swaps the overall allocated memory and total memory to a human readable format for the table
     overall_alloc_mem = human_readable(overall_alloc_mem)
     overall_total_mem = human_readable(overall_total_mem)
 
+    # Calculates the overall percent used for gpu
     overall_percent_used_gpu = 'N/A'
     if overall_total_gpu > 0:
         overall_percent_used_gpu = overall_alloc_gpu / overall_total_gpu * 100
 
+    # Prints a table with the node statistics
     print(tabulate(rows, headers=['Node', 'AllocCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'TotalMem',
                                   'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU', 'NodeState'], floatfmt=".2f"))
 
     print("\nTotals:")
 
+    # Prints the overall statistics
     print(tabulate([[overall_node, overall_alloc_cpu, overall_total_cpu, overall_percent_used_cpu, overall_cpu_load,
                     overall_alloc_mem, overall_total_mem, overall_percent_used_mem, overall_alloc_gpu,
                      overall_total_gpu, overall_percent_used_gpu]],
