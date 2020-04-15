@@ -40,7 +40,7 @@ if __name__ == '__main__':
     # Every line represents a new node
     for line in output.splitlines():
         # If a partition is specified, only those values are shown
-        if args.partition:
+        if args.partition and args.partition != 'all':
             # Initializes a bool that will send the loop back to the start if the partition is incorrect
             back_to_start = False
             # Searches for the partition tag
