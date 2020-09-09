@@ -9,7 +9,9 @@ Uses tabulate python library
 ### Native
 py-sstate can be run after installing the tabulate python library 
 
-`pip3 install -r requirements.txt`
+```
+pip3 install -r requirements.txt
+```
 
 ### Bundled
 For environments that don't want to have a virtual environment setup nor have python libraries installed:
