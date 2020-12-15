@@ -89,32 +89,60 @@ if __name__ == '__main__':
 
             # Changes values based on key
             if key == 'CPUAlloc':
-                cpu_alloc = int(val)
-                overall_alloc_cpu += cpu_alloc
+                try:
+                    cpu_alloc = int(val)
+                    overall_alloc_cpu += cpu_alloc
+                except ValueError:
+                    cpu_alloc = 0
+                    overall_alloc_cpu += cpu_alloc
             elif key == 'CPUTot':
-                cpu_tot = int(val)
-                overall_total_cpu += cpu_tot
+                try:
+                    cpu_tot = int(val)
+                    overall_total_cpu += cpu_tot
+                except ValueError:
+                    cpu_tot = 0
+                    overall_total_cpu += cpu_tot
             elif key == 'CPULoad':
-                cpu_load = float(val)
-                overall_cpu_load += cpu_load
+                try:
+                    cpu_load = float(val)
+                    overall_cpu_load += cpu_load
+                except ValueError:
+                    cpu_load = float(0)
+                    overall_cpu_load += cpu_load
             elif key == 'RealMemory':
-                total_mem = int(val)
-                overall_total_mem += total_mem
+                try:
+                    total_mem = int(val)
+                    overall_total_mem += total_mem
+                except ValueError:
+                    total_mem = 0
+                    overall_total_mem += total_mem
             elif key == 'AllocMem':
-                alloc_mem = int(val)
-                overall_alloc_mem += alloc_mem
+                try:
+                    alloc_mem = int(val)
+                    overall_alloc_mem += alloc_mem
+                except ValueError:
+                    alloc_mem = 0
+                    overall_alloc_mem += alloc_mem
             elif key == 'State':
                 node_state = val
             elif key == 'CfgTRES':
                 # If there is gpu data, gets the total number of gpus
                 if 'gres/gpu' in pair:
-                    gpu_tot = int(pair.split(",")[-1].split("=")[1])
-                    overall_total_gpu += gpu_tot
+                    try:
+                        gpu_tot = int(pair.split(",")[-1].split("=")[1])
+                        overall_total_gpu += gpu_tot
+                    except ValueError:
+                        gpu_tot = 0
+                        overall_total_gpu += gpu_tot
             elif key == 'AllocTRES':
                 # If there is gpu data, get the allocated number of gpus
                 if 'gres/gpu' in pair:
-                    gpu_alloc = int(pair.split(",")[-1].split("=")[1])
-                    overall_alloc_gpu += gpu_alloc
+                    try:
+                        gpu_alloc = int(pair.split(",")[-1].split("=")[1])
+                        overall_alloc_gpu += gpu_alloc
+                    except ValueError:
+                        gpu_alloc = 0
+                        overall_alloc_gpu += gpu_alloc
 
         # Calculates percent used for cpu
         percent_used_cpu = 0
