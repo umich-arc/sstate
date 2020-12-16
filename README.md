@@ -16,9 +16,17 @@ pip3 install -r requirements.txt
 ### Bundled
 For environments that don't want to have a virtual environment setup nor have python libraries installed:
 
+#### Install pipenv and pyinstaller
+This will install pipenv and pyinstaller for your general environment
+
 ```
-pip3 install -r requirements.txt
 pip3 install pipenv pyinstaller
+```
+
+#### Install pipenv and pyinstaller
+This will create the virtual environment, download the required libraries, and then generate a compiled version which will reside in `dist/sstate`
+
+```
 pipenv install
 pipenv run pyinstaller sstate.py --onefile
 ```
