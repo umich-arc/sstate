@@ -6,14 +6,15 @@ Uses tabulate python library
 
 ## Installation and Usage
 
-### Native
+### Running as Python script 
 sstate can be run after installing the tabulate python library 
 
 ```
 pip3 install -r requirements.txt
+./sstate.py
 ```
 
-### Bundled
+### Creating a standalone executable
 For environments that don't want to have a virtual environment setup nor have python libraries installed:
 
 #### Install pipenv and pyinstaller
@@ -29,4 +30,5 @@ This will create the virtual environment, download the required libraries, and t
 ```
 pipenv install
 pipenv run pyinstaller sstate.py --onefile
+./dist/sstate
 ```
