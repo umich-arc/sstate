@@ -20,7 +20,7 @@ For environments that don't want to have a virtual environment setup nor have py
 This will install pipenv and pyinstaller for your general environment
 
 ```
-pip3 install pipenv pyinstaller
+pip3 install [--user] pipenv pyinstaller
 ```
 
 #### Install pipenv and pyinstaller
