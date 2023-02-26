@@ -1,3 +1,5 @@
+#!/bin/env python3
+
 from tabulate import tabulate
 import subprocess
 import argparse
