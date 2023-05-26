@@ -30,13 +30,16 @@ if __name__ == '__main__':
     rows = []
     overall_node = 0
     overall_alloc_cpu = 0
+    overall_available_cpu = 0
     overall_total_cpu = 0
     overall_cpu_load = 0
 
     overall_alloc_mem = 0
+    overall_available_mem = 0
     overall_total_mem = 0
 
     overall_alloc_gpu = 0
+    overall_available_gpu = 0
     overall_total_gpu = 0
 
     # Every line represents a new node
@@ -151,10 +154,20 @@ if __name__ == '__main__':
         if cpu_tot > 0:
             percent_used_cpu = cpu_alloc / cpu_tot * 100
 
+        # Calculates available cpus
+        cpu_avail = cpu_tot
+        if cpu_alloc != 0:
+            cpu_avail = cpu_tot - cpu_alloc
+
         # Calculates percent used for memory
         percent_used_mem = 0
         if total_mem > 0:
             percent_used_mem = alloc_mem / total_mem * 100
+
+        # Calculates available memory
+        avail_mem = total_mem
+        if alloc_mem != 0:
+            avail_mem = total_mem - alloc_mem
 
         # If there are GPUs but none are allocated, sets GPU allocated to 0
         if type(gpu_alloc) is str and type(gpu_tot) is int:
@@ -163,17 +176,44 @@ if __name__ == '__main__':
         if type(gpu_alloc) is int and type(gpu_tot) is int:
             percent_used_gpu = gpu_alloc / gpu_tot * 100
 
-        # Swaps the allocated memory and total memory to a human readable format for the table
+        # Calculates available gpus
+        gpu_avail = gpu_tot
+        if gpu_alloc != "N/A" and gpu_alloc != 0:
+            gpu_avail = gpu_tot - gpu_alloc
+
+        # Adjust available resources based on full allocated resources
+        if cpu_alloc == cpu_tot:
+            avail_mem = 0
+            if gpu_alloc != "N/A":
+                gpu_avail = 0
+        if alloc_mem == total_mem:
+            cpu_avail = 0
+            if gpu_alloc != "N/A":
+                gpu_avail = 0
+        if gpu_alloc != "N/A":
+            if gpu_alloc == gpu_tot:
+                cpu_avail = 0
+                avail_mem = 0
+
+        # Calculate the available resources
+        overall_available_cpu += cpu_avail
+        overall_available_mem += avail_mem
+        if gpu_avail != "N/A":
+            overall_available_gpu += gpu_avail
+
+        # Swaps the allocated memory, total memory, and available memory to a human readable format for the table
         alloc_mem = human_readable(alloc_mem)
         total_mem = human_readable(total_mem)
+        avail_mem = human_readable(avail_mem)
 
-        rows.append([node_name, cpu_alloc, cpu_tot, percent_used_cpu, cpu_load, alloc_mem, total_mem, percent_used_mem,
-                     gpu_alloc, gpu_tot, percent_used_gpu, node_state])
+        rows.append([node_name, cpu_alloc, cpu_avail, cpu_tot, percent_used_cpu, cpu_load, alloc_mem, avail_mem, total_mem, percent_used_mem,
+                     gpu_alloc, gpu_avail, gpu_tot, percent_used_gpu, node_state])
 
     # Calculates the overall percent used for cpu
     overall_percent_used_cpu = 0
     if overall_total_cpu > 0:
         overall_percent_used_cpu = overall_alloc_cpu / overall_total_cpu * 100
+
     # Calculates the average cpu load
     if overall_node > 0:
         overall_cpu_load = overall_cpu_load / overall_node
@@ -183,9 +223,10 @@ if __name__ == '__main__':
     if overall_total_mem > 0:
         overall_percent_used_mem = overall_alloc_mem / overall_total_mem * 100
 
-    # Swaps the overall allocated memory and total memory to a human readable format for the table
+    # Swaps the overall allocated memory, total memory, and available memory to a human readable format for the table
     overall_alloc_mem = human_readable(overall_alloc_mem)
     overall_total_mem = human_readable(overall_total_mem)
+    overall_available_mem = human_readable(overall_available_mem)
 
     # Calculates the overall percent used for gpu
     overall_percent_used_gpu = 'N/A'
@@ -193,14 +234,14 @@ if __name__ == '__main__':
         overall_percent_used_gpu = overall_alloc_gpu / overall_total_gpu * 100
 
     # Prints a table with the node statistics
-    print(tabulate(rows, headers=['Node', 'AllocCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'TotalMem',
-                                  'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU', 'NodeState'], floatfmt=".2f"))
+    print(tabulate(rows, headers=['Node', 'AllocCPU', 'AvailCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'AvailMem', 'TotalMem',
+                                  'PercentUsedMem', 'AllocGPU', 'AvailGPU', 'TotalGPU', 'PercentUsedGPU', 'NodeState'], floatfmt=".2f"))
 
     print("\nTotals:")
 
     # Prints the overall statistics
-    print(tabulate([[overall_node, overall_alloc_cpu, overall_total_cpu, overall_percent_used_cpu, overall_cpu_load,
-                    overall_alloc_mem, overall_total_mem, overall_percent_used_mem, overall_alloc_gpu,
-                     overall_total_gpu, overall_percent_used_gpu]],
-                   headers=['Node', 'AllocCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'TotalMem',
-                            'PercentUsedMem', 'AllocGPU', 'TotalGPU', 'PercentUsedGPU'], floatfmt=".2f"))
+    print(tabulate([[overall_node, overall_alloc_cpu, overall_available_cpu, overall_total_cpu, overall_percent_used_cpu, overall_cpu_load,
+                    overall_alloc_mem, overall_available_mem, overall_total_mem, overall_percent_used_mem, overall_alloc_gpu,
+                    overall_available_gpu, overall_total_gpu, overall_percent_used_gpu]],
+                   headers=['Node', 'AllocCPU', 'AvailCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'AvailMem', 'TotalMem',
+                            'PercentUsedMem', 'AllocGPU', 'AvailGPU', 'TotalGPU', 'PercentUsedGPU'], floatfmt=".2f"))
