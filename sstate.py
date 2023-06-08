@@ -24,7 +24,7 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     # Calls the scontrol script and gets its output
-    output = subprocess.check_output('/opt/slurm/bin/scontrol show nodes --oneliner', shell=True).decode()
+    output = subprocess.check_output('/usr/bin/scontrol show nodes --oneliner', shell=True).decode()
 
     # Initializes variables to track values
     rows = []
