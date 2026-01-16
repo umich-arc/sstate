@@ -1,271 +1,259 @@
-#!/bin/env python3
+#!/usr/bin/env python3
+"""
+sstate.py - U-M Cluster Partition & Node Summary Tool
+
+Queries cluster node information using Slurm's scontrol and provides a compact,
+colorful summary (CPU, memory, GPU) for each node and for totals.
+
+Features:
+- Works for all partitions, or can be limited to a specific partition using -p/--partition
+- Handles nodes with/without GPUs
+- Colorized output using the 'rich' library for fast resource assessment
+- Usage help and guided error messages
+
+Usage:
+    ./sstate.py              # Show all nodes
+    ./sstate.py -p gpu       # Show just the gpu partition
+    ./sstate.py --partition standard
+
+Requirements:
+    pip install --user rich
+"""
 
 import argparse
 import subprocess
 import re
-from tabulate import tabulate
+import sys
+
+# Try to import rich, with user guidance if missing
+try:
+    from rich.console import Console
+    from rich.table import Table
+except ImportError:
+    print("Error: This script requires the 'rich' Python package.\n"
+          "Install it with: pip install --user rich\n")
+    sys.exit(1)
 
 def parse_args():
+    """
+    Parse command line arguments.
+    Returns:
+        argparse.Namespace: Parsed arguments object with .partition attribute.
+    """
     parser = argparse.ArgumentParser(
-        description="Query node data in Slurm.",
+        description="Query node data in Slurm and show resource summary.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         usage="""
-        # Querying all nodes:
-        sstate
-
-        # Querying a specific partition with example:
-        sstate -p $partition_name
-        sstate -p gpu
-        """
-    )
+  sstate.py                # Show all nodes
+  sstate.py -p PARTITION   # Show nodes in partition (e.g. sstate.py -p gpu)
+        """.strip())
     parser.add_argument(
         "-p", "--partition",
-        help="Query specific partition. If this is not specified all nodes will be shown.",
+        help="Query specific partition. If omitted, all nodes are shown.",
         type=str,
         metavar=""
     )
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
-# This function converts MB to larger units
-def human_readable(num, suffix='B'):
-    for unit in ['Mi','Gi','Ti','Pi','Ei','Zi']:
-        if abs(num) < 1024.0:
-            return "%3.1f%s%s" % (num, unit, suffix)
-        num /= 1024.0
-    return "%.1f%s%s" % (num, 'Yi', suffix)
-
-# This function will take the scontrol output and reformat the node data into a list of kv pairs
-# This will allow for better parsing/filtering of the node data later in the script
-def reformat_scontrol_output(scontrol_output, node_data_list=[]):
-    scontrol_output = scontrol_output.splitlines()
-    for node_output in scontrol_output:
+def reformat_scontrol_output(scontrol_output):
+    """
+    Parse scontrol output into a list of per-node key=value strings for easier processing.
+    Args:
+        scontrol_output (str): Raw output from `scontrol show nodes --oneliner`
+    Returns:
+        list of lists: Each inner list is the node's attribute strings.
+    """
+    node_data_list = []
+    for node_output in scontrol_output.strip().splitlines():
+        # Split on key=, keep key in result for later parsing
         temp_data_list = []
-        node = re.split(r"([A-Z]\w+=)", node_output)
-        for element, line in enumerate(node):
-            if re.match(r"([A-Z]\w+=)", line):
-                temp_data_list.append("{0}{1}".format(node[element], node[element+1]))
+        parts = re.split(r"([A-Z]\w+=)", node_output)
+        for idx, part in enumerate(parts):
+            if re.match(r"([A-Z]\w+=)", part):
+                temp_data_list.append(part + parts[idx+1])
         node_data_list.append(temp_data_list)
     return node_data_list
 
-# This function will filter out unwanted nodes if a partition is specified
-def filter_partition_node_data(args, node_data_list, partition_node_data_list=[]):
+def filter_partition_node_data(partition, node_data_list):
+    """
+    Select only nodes assigned to specified partition. If no partition, select all nodes.
+    Args:
+        partition (str or None): Partition name to filter, or None for all.
+        node_data_list (list): List of node key=value lists.
+    Returns:
+        Filtered list of node key=value lists.
+    """
+    if not partition:
+        return node_data_list  # No filtering needed
+    partition_node_data_list = []
     for node in node_data_list:
         for line in node:
-            if line.split("=")[0].strip() == "Partitions":
-                if args.partition == "debug":
-                    if line.split("=")[1].strip() != "debug":
-                        continue
-                    else:
-                        partition_node_data_list.append(node)
-                else:
-                    for partition in line.split("=")[1].split(","):
-                        if args.partition.lower() == partition.strip():
-                            partition_node_data_list.append(node)
+            if line.startswith("Partitions="):
+                # Each node may serve multiple partitions (comma-separated)
+                node_partitions = [p.strip().lower() for p in line.split("=")[1].split(",")]
+                if partition.lower() in node_partitions:
+                    partition_node_data_list.append(node)
+                break  # Each node's partition data only needs checked once
     return partition_node_data_list
 
-# This function will parse through node data to get available, allocated, and total resources
-# It will also calculate some resource averages and usage percents, as well as print output
 def parse_node_data(node_data_list):
-    # Initializes variables to track resource values
-    rows = []
-    overall_node = 0
-    overall_alloc_cpu = 0
-    overall_available_cpu = 0
-    overall_total_cpu = 0
-    overall_cpu_load = 0
+    """
+    For each node, parse out CPU/mem/GPU usage and print a color-coded table.
+    Handles nodes with or without GPUs.
+    Args:
+        node_data_list (list): List of node key=value lists (as from reformat_scontrol_output).
+    Returns: None
+    """
+    console = Console()
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Node", style="bold")
+    table.add_column("CPU (Alloc/Total)")
+    table.add_column("MEM (GiB: Alloc/Total)")
+    table.add_column("GPU (Alloc/Total)")
+    table.add_column("State")
 
-    overall_alloc_mem = 0
-    overall_available_mem = 0
-    overall_total_mem = 0
+    # Accumulators for cluster totals
+    totals = {
+        'nodes': 0, 'cpu_alloc':0, 'cpu_tot':0,
+        'mem_alloc':0, 'mem_tot':0,
+        'gpu_alloc':0, 'gpu_tot':0,
+    }
+    gpu_present = False
 
-    overall_alloc_gpu = 0
-    overall_available_gpu = 0
-    overall_total_gpu = 0
-
-    # Loop through each node and gather scontrol info on them
-    # This will also get resources and calculate resource totals and averages
     for node in node_data_list:
-        overall_node += 1
-        gpu_tot = 'N/A'
-        gpu_alloc = 'N/A'
-        percent_used_gpu = 'N/A'
+        # Set defaults in case certain keys are missing
+        node_name = "?"
+        cpu_alloc = cpu_tot = 0
+        mem_alloc = mem_tot = 0
+        gpu_alloc = gpu_tot = None
+        node_state = "?"
 
+        # Parse node attributes into variables
         for line in node:
-            key = re.split(r"([A-Z]\w+)(?==)", line)[1]
-            value = re.split(r"([A-Z]\w+=)", line)[2]
+            try:
+                key = re.split(r"([A-Z]\w+)(?==)", line)[1]
+                value = re.split(r"([A-Z]\w+=)", line)[2]
+            except Exception:
+                continue  # Skip any unparseable attribute
 
-            # Changes values based on key
+            # Assign fields based on key
             if key == "NodeName":
-                node_name = value           
+                node_name = value
             elif key == "CPUAlloc":
-                try:
-                    cpu_alloc = int(value)
-                    overall_alloc_cpu += cpu_alloc
-                except ValueError:
-                    cpu_alloc = 0
-                    overall_alloc_cpu += cpu_alloc
+                try: cpu_alloc = int(value)
+                except ValueError: cpu_alloc = 0
             elif key == "CPUTot":
-                try:
-                    cpu_tot = int(value)
-                    overall_total_cpu += cpu_tot
-                except ValueError:
-                    cpu_tot = 0
-                    overall_total_cpu += cpu_tot
-            elif key == "CPULoad":
-                try:
-                    cpu_load = float(value)
-                    overall_cpu_load += cpu_load
-                except ValueError:
-                    cpu_load = float(0)
-                    overall_cpu_load += cpu_load
-            elif key == "RealMemory":
-                try:
-                    total_mem = int(value)
-                    overall_total_mem += total_mem
-                except ValueError:
-                    total_mem = 0
-                    overall_total_mem += total_mem
+                try: cpu_tot = int(value)
+                except ValueError: cpu_tot = 0
             elif key == "AllocMem":
-                try:
-                    alloc_mem = int(value)
-                    overall_alloc_mem += alloc_mem
-                except ValueError:
-                    alloc_mem = 0
-                    overall_alloc_mem += alloc_mem
+                try: mem_alloc = int(value) / 1024  # MB -> GiB
+                except ValueError: mem_alloc = 0
+            elif key == "RealMemory":
+                try: mem_tot = int(value) / 1024
+                except ValueError: mem_tot = 0
             elif key == "State":
                 node_state = value
             elif key == "CfgTRES":
-                # If there is gpu data, gets the total number of gpus
                 if "gres/gpu" in value:
                     try:
+                        # Format: ...gres/gpu=X
                         gpu_tot = int(value.split(",")[-1].split("=")[1])
-                        overall_total_gpu += gpu_tot
-                    except ValueError:
-                        gpu_tot = 0
-                        overall_total_gpu += gpu_tot
+                    except Exception:
+                        gpu_tot = None
             elif key == "AllocTRES":
-                # If there is gpu data, get the allocated number of gpus
                 if "gres/gpu" in value:
                     try:
                         gpu_alloc = int(value.split(",")[-1].split("=")[1])
-                        overall_alloc_gpu += gpu_alloc
-                    except ValueError:
-                        gpu_alloc = 0
-                        overall_alloc_gpu += gpu_alloc
-        # Calculates percent used for cpu
-        percent_used_cpu = 0
-        if cpu_tot > 0:
-            percent_used_cpu = cpu_alloc / cpu_tot * 100
+                    except Exception:
+                        gpu_alloc = None
 
-        # Calculates available cpus
-        cpu_avail = cpu_tot
-        if cpu_alloc != 0:
-            cpu_avail = cpu_tot - cpu_alloc
+        # Compute used percentages where possible for coloring
+        cpu_pct = int(round(cpu_alloc / cpu_tot * 100)) if cpu_tot else None
+        mem_pct = int(round(mem_alloc / mem_tot * 100)) if mem_tot else None
+        if isinstance(gpu_alloc, int) and isinstance(gpu_tot, int) and gpu_tot > 0:
+            gpu_pct = int(round(gpu_alloc / gpu_tot * 100))
+            gpu_present = True
+        else:
+            gpu_pct = None
 
-        # Calculates percent used for memory
-        percent_used_mem = 0
-        if total_mem > 0:
-            percent_used_mem = alloc_mem / total_mem * 100
+        def color(val, pct):
+            """
+            Colorizes value according to percentage used.
+            Returns a string with rich markup.
+            """
+            if pct is None: return str(val)
+            if pct < 50: return f"[green]{val}[/]"
+            elif pct < 80: return f"[yellow]{val}[/]"
+            else: return f"[red]{val}[/]"
 
-        # Calculates available memory
-        avail_mem = total_mem
-        if alloc_mem != 0:
-            avail_mem = total_mem - alloc_mem
+        cpu_str = f"{color(cpu_alloc, cpu_pct)}/{cpu_tot}"
+        mem_str = f"{color(int(mem_alloc), mem_pct)}/{int(mem_tot)}"
+        if gpu_present and gpu_pct is not None and gpu_tot is not None:
+            gpu_str = f"{color(gpu_alloc, gpu_pct)}/{gpu_tot}"
+        else:
+            gpu_str = "--/--"
 
-        # If there are GPUs but none are allocated, sets GPU allocated to 0
-        if type(gpu_alloc) is str and type(gpu_tot) is int:
-            gpu_alloc = 0
-        # Calculates percent used for GPU
-        if type(gpu_alloc) is int and type(gpu_tot) is int:
-            percent_used_gpu = gpu_alloc / gpu_tot * 100
+        table.add_row(node_name, cpu_str, mem_str, gpu_str, node_state)
 
-        # Calculates available gpus
-        gpu_avail = gpu_tot
-        if gpu_alloc != "N/A" and gpu_alloc != 0:
-            gpu_avail = gpu_tot - gpu_alloc
+        # Accumulate totals for summary row
+        totals['nodes'] += 1
+        totals['cpu_alloc'] += cpu_alloc
+        totals['cpu_tot'] += cpu_tot
+        totals['mem_alloc'] += mem_alloc
+        totals['mem_tot'] += mem_tot
+        if gpu_present and isinstance(gpu_alloc, int) and isinstance(gpu_tot, int):
+            totals['gpu_alloc'] += gpu_alloc
+            totals['gpu_tot'] += gpu_tot
 
-        # Adjust available resources based on full allocated resources
-        if cpu_alloc == cpu_tot:
-            avail_mem = 0
-            if gpu_alloc != "N/A":
-                gpu_avail = 0
-        if alloc_mem == total_mem:
-            cpu_avail = 0
-            if gpu_alloc != "N/A":
-                gpu_avail = 0
-        if gpu_alloc != "N/A":
-            if gpu_alloc == gpu_tot:
-                cpu_avail = 0
-                avail_mem = 0
+    # Add totals summary row if any nodes were processed
+    if totals['cpu_tot'] > 0 and totals['mem_tot'] > 0 and totals['nodes'] > 0:
+        total_cpu_pct = int(round(totals['cpu_alloc']/totals['cpu_tot']*100))
+        total_mem_pct = int(round(totals['mem_alloc']/totals['mem_tot']*100))
+        cpu_str = f"{color(totals['cpu_alloc'], total_cpu_pct)}/{totals['cpu_tot']}"
+        mem_str = f"{color(int(totals['mem_alloc']), total_mem_pct)}/{int(totals['mem_tot'])}"
 
-        # Calculate the available resources
-        overall_available_cpu += cpu_avail
-        overall_available_mem += avail_mem
-        if gpu_avail != "N/A":
-            overall_available_gpu += gpu_avail
+        if gpu_present and totals['gpu_tot']:
+            total_gpu_pct = int(round(totals['gpu_alloc']/totals['gpu_tot']*100))
+            gpu_str = f"{color(totals['gpu_alloc'], total_gpu_pct)}/{totals['gpu_tot']}"
+        else:
+            gpu_str = "--/--"
 
-        # Swaps the allocated memory, total memory, and available memory to a human readable format for the table
-        alloc_mem = human_readable(alloc_mem)
-        total_mem = human_readable(total_mem)
-        avail_mem = human_readable(avail_mem)
+        table.add_row("[b]Totals[/b]", cpu_str, mem_str, gpu_str, "")
 
-        rows.append([node_name, cpu_alloc, cpu_avail, cpu_tot, percent_used_cpu, cpu_load, alloc_mem, avail_mem, total_mem, percent_used_mem,
-                     gpu_alloc, gpu_avail, gpu_tot, percent_used_gpu, node_state])
+    if totals['nodes'] == 0:
+        console.print("[red]No nodes found in this partition. Check your partition name or Slurm state.[/]")
+    else:
+        console.print(table)
 
-    # Calculates the overall percent used for cpu
-    overall_percent_used_cpu = 0
-    if overall_total_cpu > 0:
-        overall_percent_used_cpu = overall_alloc_cpu / overall_total_cpu * 100
-
-    # Calculates the average cpu load
-    if overall_node > 0:
-        overall_cpu_load = overall_cpu_load / overall_node
-
-    # Calculates the overall percent used for mem
-    overall_percent_used_mem = 0
-    if overall_total_mem > 0:
-        overall_percent_used_mem = overall_alloc_mem / overall_total_mem * 100
-
-    # Swaps the overall allocated memory, total memory, and available memory to a human readable format for the table
-    overall_alloc_mem = human_readable(overall_alloc_mem)
-    overall_total_mem = human_readable(overall_total_mem)
-    overall_available_mem = human_readable(overall_available_mem)
-
-    # Calculates the overall percent used for gpu
-    overall_percent_used_gpu = 'N/A'
-    if overall_total_gpu > 0:
-        overall_percent_used_gpu = overall_alloc_gpu / overall_total_gpu * 100
-
-    # Prints a table with the node statistics
-    print(tabulate(rows, headers=['Node', 'AllocCPU', 'AvailCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'AvailMem', 'TotalMem',
-                                  'PercentUsedMem', 'AllocGPU', 'AvailGPU', 'TotalGPU', 'PercentUsedGPU', 'NodeState'], floatfmt=".2f"))
-
-    print("\nTotals:")
-
-    # Prints the overall statistics
-    print(tabulate([[overall_node, overall_alloc_cpu, overall_available_cpu, overall_total_cpu, overall_percent_used_cpu, overall_cpu_load,
-                    overall_alloc_mem, overall_available_mem, overall_total_mem, overall_percent_used_mem, overall_alloc_gpu,
-                    overall_available_gpu, overall_total_gpu, overall_percent_used_gpu]],
-                   headers=['Node', 'AllocCPU', 'AvailCPU', 'TotalCPU', 'PercentUsedCPU', 'CPULoad', 'AllocMem', 'AvailMem', 'TotalMem',
-                            'PercentUsedMem', 'AllocGPU', 'AvailGPU', 'TotalGPU', 'PercentUsedGPU'], floatfmt=".2f"))
-
-# Main function
 def main():
-    # Parse command line arguments
+    """
+    Main execution flow: parses arguments, calls scontrol, parses node data, and prints result.
+    """
     args = parse_args()
 
-    # Get node data via scontrol and reformat it for easier usability
-    scontrol_output = subprocess.check_output("/usr/bin/scontrol show nodes --oneliner", shell=True).decode()
+    # Run scontrol and collect node data
+    try:
+        scontrol_output = subprocess.check_output(
+            "/usr/bin/scontrol show nodes --oneliner", shell=True, text=True
+        )
+    except FileNotFoundError:
+        print("[red]Error: scontrol not found. Are you running on a Slurm management node?[/]")
+        sys.exit(2)
+    except subprocess.CalledProcessError as e:
+        print(f"[red]Failed to query nodes with scontrol: {e}[/]")
+        sys.exit(2)
+
     node_data_list = reformat_scontrol_output(scontrol_output)
+    filtered_node_data_list = filter_partition_node_data(args.partition, node_data_list)
 
-    # If a partition is specified, filter out unwanted nodes from reformatted scontrol output
-    if args.partition:
-        node_data_list = filter_partition_node_data(args, node_data_list)
+    if not filtered_node_data_list:
+        print("[red]No nodes matched the given partition (or no nodes found at all).[/]")
+        suggestions = "- Check your partition name with 'sinfo'\n" \
+                      "- Run without -p/--partition for all nodes"
+        print(suggestions)
+        sys.exit(0)
 
-    # Parse through the node data to get available, allocated, and total resources
-    # This will also calculate some resource averages and usage percents, as well as print output
-    parse_node_data(node_data_list)
+    parse_node_data(filtered_node_data_list)
 
-# Execute main function
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
